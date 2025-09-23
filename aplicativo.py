@@ -8,38 +8,47 @@ MAX_NIVEL = 5
 
 def consulta_cnpj_cnpja(cnpj):
     url = f"https://open.cnpja.com/office/{cnpj}"
-    r = requests.get(url)
-    if r.status_code == 200:
-        return r.json()
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        return None
     return None
 
 def consulta_cnpj_cnpjws(cnpj):
     url = f"https://www.cnpj.ws/{cnpj}"
-    r = requests.get(url)
-    if r.status_code == 200:
-        return r.json()
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        return None
     return None
 
 def extrai_socios(dados):
     socios = []
     if not dados:
         return socios
-    if "partners" in dados:
-        for p in dados["partners"]:
-            socio = {
-                "nome": p.get("name") or p.get("nome") or "",
-                "tipo": "pessoa_fisica" if p.get("is_individual") else "pessoa_juridica",
-                "cnpj": p.get("cnpj_cpf") or p.get("cnpj") or ""
-            }
-            socios.append(socio)
-    elif "socios" in dados:
-        for p in dados["socios"]:
-            socio = {
-                "nome": p.get("nome"),
-                "tipo": p.get("tipo_socio"),
-                "cnpj": p.get("cnpj")
-            }
-            socios.append(socio)
+    # Para CNPJA e Receita, sócios costumam estar no campo 'qsa'
+    if "qsa" in dados:
+        for socio in dados["qsa"]:
+            tipo = "pessoa_fisica" if socio.get("qualificacao", "").lower().find("sócio") != -1 or socio.get("qualificacao", "").lower().find("administrador") != -1 else "pessoa_juridica"
+            socios.append({
+                "nome": socio.get("nome", ""),
+                "tipo": tipo,
+                "cnpj": socio.get("cnpj", "")
+            })
+    # Caso não encontre, tenta buscar por "partners"
+    elif "partners" in dados:
+        for socio in dados["partners"]:
+            tipo = "pessoa_fisica" if socio.get("is_individual", False) else "pessoa_juridica"
+            socios.append({
+                "nome": socio.get("name") or socio.get("nome") or "",
+                "tipo": tipo,
+                "cnpj": socio.get("cnpj_cpf") or socio.get("cnpj") or ""
+            })
+    # Ajustar para outras possíveis estruturas se necessário
     return socios
 
 def busca_beneficiario_final(cnpj, nivel=1, max_nivel=MAX_NIVEL, visitados=None):
@@ -83,23 +92,24 @@ def gera_pdf(dados):
     buffer.close()
     return pdf
 
-# Streamlit UI
+# Interface Streamlit
 
 st.title("Consulta de Beneficiário Final - Cadeia Societária")
 
 cnpj_input = st.text_input("Digite o CNPJ (somente números)")
 
 if st.button("Buscar"):
-    if not cnpj_input or len(cnpj_input) < 14:
-        st.error("Informe um CNPJ válido com 14 dígitos.")
+    cnpj_only_numbers = ''.join(filter(str.isdigit, cnpj_input))
+    if not cnpj_only_numbers or len(cnpj_only_numbers) != 14:
+        st.error("Informe um CNPJ válido com 14 dígitos numéricos.")
     else:
         with st.spinner("Consultando a cadeia societária..."):
-            resultados = busca_beneficiario_final(cnpj_input)
+            resultados = busca_beneficiario_final(cnpj_only_numbers)
         if resultados:
             st.success(f"Encontrados {len(resultados)} beneficiário(s) final(is)")
             for item in resultados:
                 st.write(f"Nível {item['nivel']} - Nome: {item['socio']['nome']}")
-            
+
             if st.button("Gerar relatório PDF"):
                 pdf_bytes = gera_pdf(resultados)
                 st.download_button(
