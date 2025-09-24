@@ -34,7 +34,7 @@ def busca_cadeia(df, cnpj, visitados=None, nivel=1, max_nivel=5):
         if tipo.startswith('pessoa física'):
             resultados.append({'nivel': nivel, 'nome': nome, 'identificacao': socio_id})
         else:
-            resultados.extend(busca_cadeia(df, socio_id, visitados, nivel+1, max_nivel))
+            resultados.extend(busca_cadeia(df, socio_id, visitados, nivel + 1, max_nivel))
     return resultados
 
 def gera_pdf(dados):
@@ -85,4 +85,3 @@ if 'df_qsa' in st.session_state:
                     st.download_button("Download PDF", pdf_bytes, file_name="beneficiarios_finais.pdf", mime="application/pdf")
             else:
                 st.info("Nenhum beneficiário final encontrado.")
-
